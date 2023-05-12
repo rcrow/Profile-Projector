@@ -83,10 +83,14 @@ class Projector(object):
         toProjectFile = parameters[0].valueAsText
         OutputFeatureClass = parameters[3].valueAsText
         dem = parameters[4].valueAsText
+
+        miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
+        to_project_spatial = arcpy.Describe(parameters[0].value).spatialReference
+
         arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "MilesSplit",
-                                              "Z:/Team/Crow/ArcTools/HardCodedPolygons/UTM11N.prj")
+                                              miles_spatial)
         arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "PointsSplit",
-                                              "Z:/Team/Crow/ArcTools/HardCodedPolygons/UTM11N.prj")
+                                              to_project_spatial)
 
         scratch = arcpy.env.scratchWorkspace
 
