@@ -1,4 +1,5 @@
 import arcpy
+import utils.functions
 from arcpy import management, analysis
 
 
@@ -31,7 +32,7 @@ class Projector(object):
             displayName="River Distance Field:",
             name="distance",
             datatype="Field",
-            parameterType="Optional",
+            parameterType="Required",
             direction="Input")
         param2.filter.list = ["Short", "Long", "Float", "Single", "Double"]
         param2.parameterDependencies = [param1.name]
@@ -40,7 +41,7 @@ class Projector(object):
             displayName="Polygon Feature Class with zones:",
             name="zonesFile",
             datatype="GPFeatureLayer",
-            parameterType="Required",
+            parameterType="Optional",
             direction="Input")
         param3.filter.list = ['Polygon']
 
@@ -49,7 +50,8 @@ class Projector(object):
             name="zone",
             datatype="Field",
             parameterType="Optional",
-            direction="Input")
+            direction="Input",
+            enabled=False)
         param4.filter.list = ["Text"]
         param4.parameterDependencies = [param3.name]
 
@@ -86,12 +88,30 @@ class Projector(object):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed."""
+        zones_file = parameters[3].value
+        zone_name = parameters[4]
+
+        if zones_file is None:
+            zone_name.enabled = False
+            zone_name.value = None
+        else:
+            zone_name.enabled = True
+
         arcpy.env.overwriteOutput = True
         return
 
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
         parameter.  This method is called after internal validation."""
+        zones_file = parameters[3].value
+        zone_name = parameters[4]
+
+        if zones_file is None or zone_name.value is not None:
+            zone_name.clearMessage()
+
+        if zones_file is not None and zone_name.value is None:
+            zone_name.setIDMessage("Error", "530")
+
         return
 
     def execute(self, parameters, messages):
@@ -99,11 +119,13 @@ class Projector(object):
         messages.addMessage("getting things started ...")
         # Assign variables
         zonesList = None
-        zonesFile = parameters[2].valueAsText
+        zonesFile = parameters[3].valueAsText
+        zone_field = parameters[4].valueAsText
         milesFile = parameters[1].valueAsText
+        distance_field = parameters[2].valueAsText
         toProjectFile = parameters[0].valueAsText
-        OutputFeatureClass = parameters[3].valueAsText
-        dem = parameters[4].valueAsText
+        OutputFeatureClass = parameters[5].valueAsText
+        dem = parameters[6].valueAsText
 
         miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
         to_project_spatial = arcpy.Describe(parameters[0].value).spatialReference
@@ -117,7 +139,7 @@ class Projector(object):
 
         # Split Points of Interest into zones
         messages.addMessage("Splitting points based on zones ...")
-        arcpy.analysis.Split(in_features=toProjectFile, split_features=zonesFile, split_field="Name",
+        arcpy.analysis.Split(in_features=toProjectFile, split_features=zonesFile, split_field=zone_field,
                              out_workspace=scratch + "/PointsSplit", cluster_tolerance="#")
 
         # Rename feature classes
@@ -129,7 +151,7 @@ class Projector(object):
 
         # Split Miles into zones
         messages.addMessage("Splitting miles based on zones ...")
-        arcpy.analysis.Split(in_features=milesFile, split_features=zonesFile, split_field="Name",
+        arcpy.analysis.Split(in_features=milesFile, split_features=zonesFile, split_field=zone_field,
                              out_workspace=scratch + "/MilesSplit", cluster_tolerance="#")
 
         # Rename feature classes
@@ -155,7 +177,7 @@ class Projector(object):
                 messages.addMessage("Joining ...")
                 arcpy.management.JoinField(in_data=scratch + "/PointsSplit/" + item, in_field="NEAR_FID",
                                            join_table=scratch + "/MilesSplit/" + item[0:-3] + "_mi",
-                                           join_field="OBJECTID", fields="RM_final")
+                                           join_field="OBJECTID", fields=distance_field)
                 messages.addMessage("Extracting elevation...")
                 arcpy.gp.ExtractMultiValuesToPoints_sa(scratch + "/PointsSplit/" + item, dem, "NONE")
 
@@ -182,7 +204,7 @@ class Projector(object):
         arcpy.management.Delete(in_data=scratch + "/MilesSplit", data_type="FeatureDataset")
         arcpy.management.Delete(in_data=scratch + "/PointsSplit", data_type="FeatureDataset")
 
-        removeNulls = parameters[5].valueAsText
+        removeNulls = parameters[7].valueAsText
         if removeNulls == "true":
             # For testing
             fields = arcpy.ListFields(OutputFeatureClass)
@@ -190,7 +212,7 @@ class Projector(object):
                 arcpy.AddMessage("{0} is a type of {1} with a length of {2}"
                                  .format(field.name, field.type, field.length))
 
-            with arcpy.da.UpdateCursor(OutputFeatureClass, ['RM_final']) as cursor:
+            with arcpy.da.UpdateCursor(OutputFeatureClass, [distance_field]) as cursor:
 
                 for row in cursor:
                     arcpy.AddMessage(row)
