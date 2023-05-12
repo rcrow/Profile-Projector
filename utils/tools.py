@@ -28,35 +28,53 @@ class Projector(object):
         param1.filter.list = ["Point", "Multipoint"]
 
         param2 = arcpy.Parameter(
+            displayName="River Distance Field:",
+            name="distance",
+            datatype="Field",
+            parameterType="Optional",
+            direction="Input")
+        param2.filter.list = ["Short", "Long", "Float", "Single", "Double"]
+        param2.parameterDependencies = [param1.name]
+
+        param3 = arcpy.Parameter(
             displayName="Polygon Feature Class with zones:",
             name="zonesFile",
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
-        param2.filter.list = ['Polygon']
+        param3.filter.list = ['Polygon']
 
-        param3 = arcpy.Parameter(
+        param4 = arcpy.Parameter(
+            displayName="Zone Name Field:",
+            name="zone",
+            datatype="Field",
+            parameterType="Optional",
+            direction="Input")
+        param4.filter.list = ["Text"]
+        param4.parameterDependencies = [param3.name]
+
+        param5 = arcpy.Parameter(
             displayName="Output feature class:",
             name="OutputFeatureClass",
             datatype="DEFeatureClass",
             parameterType="Required",
             direction="Output")
 
-        param4 = arcpy.Parameter(
+        param6 = arcpy.Parameter(
             displayName="Individual or raster mosaic with the elevation values (DEM):",
             name="DEM",
             datatype=["GPMosaicLayer", "GPRasterLayer"],
             parameterType="Required",
             direction="Input")
 
-        param5 = arcpy.Parameter(
+        param7 = arcpy.Parameter(
             displayName="Remove points with associated profile point?",
             name="removeNulls",
             datatype="Boolean",
             parameterType="Optional",
             direction="Input")
 
-        params = [param0, param1, param2, param3, param4, param5]
+        params = [param0, param1, param2, param3, param4, param5, param6, param7]
 
         return params
 
