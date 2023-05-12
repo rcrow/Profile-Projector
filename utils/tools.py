@@ -17,6 +17,7 @@ class Projector(object):
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
+        param0.filter.list = ["Point", "Multipoint"]
 
         param1 = arcpy.Parameter(
             displayName="Point Feature Class with river miles:",
@@ -24,6 +25,7 @@ class Projector(object):
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
+        param1.filter.list = ["Point", "Multipoint"]
 
         param2 = arcpy.Parameter(
             displayName="Polygon Feature Class with zones:",
@@ -31,6 +33,7 @@ class Projector(object):
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
+        param2.filter.list = ['Polygon']
 
         param3 = arcpy.Parameter(
             displayName="Output feature class:",
@@ -40,9 +43,9 @@ class Projector(object):
             direction="Output")
 
         param4 = arcpy.Parameter(
-            displayName="Raster mosaic with the elevation values (DEM):",
+            displayName="Raster mosaic with the elevation values (DEM):222",
             name="DEM",
-            datatype="GPMosaicLayer",
+            datatype= 'GPMosaicDataset',#"GPMosaicLayer",
             parameterType="Required",
             direction="Input")
 
