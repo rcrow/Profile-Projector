@@ -45,7 +45,7 @@ class Projector(object):
         param4 = arcpy.Parameter(
             displayName="Raster mosaic with the elevation values (DEM):222",
             name="DEM",
-            datatype= 'GPMosaicDataset',#"GPMosaicLayer",
+            datatype= "GPMosaicLayer",
             parameterType="Required",
             direction="Input")
 

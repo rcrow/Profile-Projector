@@ -1,5 +1,8 @@
 import arcpy
+from utils import tools
 from utils.tools import Projector
+import importlib
+importlib.reload(tools)
 
 # Version 1.3
 
