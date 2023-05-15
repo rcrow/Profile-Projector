@@ -136,7 +136,7 @@ class Projector(object):
                                        join_table=river,
                                        join_field="OBJECTID", fields=distance_field)
 
-            arcpy.gp.ExtractMultiValuesToPoints_sa(join, dem, "NONE")
+            arcpy.sa.ExtractMultiValuesToPoints(join, dem, "NONE")
 
         if zonesFile is None:
             output = arcpy.management.Copy(toProjectFile, OutputFeatureClass)
