@@ -14,7 +14,7 @@ class Projector(object):
         """Define parameter definitions"""
         param0 = arcpy.Parameter(
             displayName="Point Feature Class with points to be projected:",
-            name="toProjectFile",
+            name="Points to Project",
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
@@ -22,7 +22,7 @@ class Projector(object):
 
         param1 = arcpy.Parameter(
             displayName="Point Feature Class with river miles:",
-            name="milesFile",
+            name="Points with River Distance",
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
@@ -39,7 +39,7 @@ class Projector(object):
 
         param3 = arcpy.Parameter(
             displayName="Polygon Feature Class with zones:",
-            name="zonesFile",
+            name="Polygons Denoting Zones",
             datatype="GPFeatureLayer",
             parameterType="Optional",
             direction="Input")
@@ -103,13 +103,13 @@ class Projector(object):
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
         parameter.  This method is called after internal validation."""
-        zones_file = parameters[3].value
+        zones_file = parameters[3]
         zone_name = parameters[4]
 
-        if zones_file is None or zone_name.value is not None:
+        if zones_file.value is None or zone_name.value is not None:
             zone_name.clearMessage()
 
-        if zones_file is not None and zone_name.value is None:
+        if zones_file.value is not None and zone_name.value is None:
             zone_name.setIDMessage("Error", "530")
 
         return
