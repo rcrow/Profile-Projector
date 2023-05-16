@@ -76,7 +76,22 @@ class Projector(object):
             parameterType="Optional",
             direction="Input")
 
-        params = [param0, param1, param2, param3, param4, param5, param6, param7]
+        param8 = arcpy.Parameter(
+            displayName="Include Projection Lines",
+            name="Projection Lines",
+            datatype="Boolean",
+            parameterType="Optional",
+            direction="Input")
+
+        param9 = arcpy.Parameter(
+            displayName="Output Projection Line Feature Class",
+            name="Projection Lines Feature",
+            datatype="DEFeatureClass",
+            parameterType="Optional",
+            direction="Output",
+            enabled=False)
+
+        params = [param0, param1, param2, param3, param4, param5, param6, param7, param8, param9]
 
         return params
 
@@ -90,27 +105,45 @@ class Projector(object):
         has been changed."""
         zones_file = parameters[3].value
         zone_name = parameters[4]
+        include_projection = parameters[8].value
+        projection_lines = parameters[9]
+
+        def deactivate(dependent_param):
+            dependent_param.enabled = False
+            dependent_param.value = None
 
         if zones_file is None:
-            zone_name.enabled = False
-            zone_name.value = None
+            deactivate(zone_name)
         else:
             zone_name.enabled = True
+
+        if not include_projection:
+            deactivate(projection_lines)
+        else:
+            projection_lines.enabled = True
 
         arcpy.env.overwriteOutput = True
         return
 
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
-        zones_file = parameters[3]
+            parameter.  This method is called after internal validation."""
+        zones_file = parameters[3].value
         zone_name = parameters[4]
+        include_projection = parameters[8].value
+        projection_lines = parameters[9]
 
-        if zones_file.value is None or zone_name.value is not None:
+        if zones_file is None or zone_name.value is not None:
             zone_name.clearMessage()
 
-        if zones_file.value is not None and zone_name.value is None:
+        if zones_file is not None and zone_name.value is None:
             zone_name.setIDMessage("Error", "530")
+
+        if not include_projection or projection_lines.value is not None:
+            projection_lines.clearMessage()
+
+        if include_projection and projection_lines.value is None:
+            projection_lines.setIDMessage("Error", "530")
 
         return
 
@@ -126,6 +159,9 @@ class Projector(object):
         toProjectFile = parameters[0].valueAsText
         OutputFeatureClass = parameters[5].valueAsText
         dem = parameters[6].valueAsText
+        remove_nulls = parameters[7].value
+        include_projection = parameters[8].value
+        projection_lines = parameters[9].valueAsText
 
         def near_join(projected, river, distance_field, dem):
             near = arcpy.analysis.Near(in_features=projected,
@@ -133,8 +169,8 @@ class Projector(object):
                                        location="LOCATION", angle="ANGLE", method="PLANAR")
 
             join = arcpy.management.JoinField(in_data=near, in_field="NEAR_FID",
-                                       join_table=river,
-                                       join_field="OBJECTID", fields=distance_field)
+                                              join_table=river,
+                                              join_field="OBJECTID", fields=distance_field)
 
             arcpy.sa.ExtractMultiValuesToPoints(join, dem, "NONE")
 
@@ -218,7 +254,6 @@ class Projector(object):
             arcpy.management.Delete(in_data=scratch + "/MilesSplit", data_type="FeatureDataset")
             arcpy.management.Delete(in_data=scratch + "/PointsSplit", data_type="FeatureDataset")
 
-        remove_nulls = parameters[7].value
         if remove_nulls:
             count = 0
             with arcpy.da.UpdateCursor(OutputFeatureClass, [distance_field]) as cursor:
@@ -232,6 +267,23 @@ class Projector(object):
                 messages.addMessage(f'{count} projected points with no distance values were deleted.')
             else:
                 messages.addMessage('All projected points have a distance value, none were deleted.')
+
+        if include_projection:
+            messages.addMessage('Creating projection lines feature class...')
+            projector_output = arcpy.management.Copy(OutputFeatureClass)
+            line_start = arcpy.management.CalculateGeometryAttributes(
+                in_features=projector_output,
+                geometry_property=[["POINT_X", "POINT_X"], ["POINT_Y", "POINT_Y"]]
+            )
+            arcpy.management.XYToLine(
+                in_table=line_start,
+                out_featureclass=projection_lines,
+                startx_field="POINT_X",
+                starty_field="POINT_Y",
+                endx_field="NEAR_X",
+                endy_field="NEAR_Y"
+            )
+            arcpy.management.Delete(line_start)
 
         arcpy.env.overwriteOutput = False
         messages.addMessage("All Done!")
