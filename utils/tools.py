@@ -146,35 +146,35 @@ class Projector(object):
     def execute(self, parameters, messages):
         arcpy.env.overwriteOutput = True
         messages.addMessage("getting things started ...")
-        # Assign variables
-        zonesList = None
-        zonesFile = parameters[3].valueAsText
-        zone_field = parameters[4].valueAsText
-        milesFile = parameters[1].valueAsText
+
+        # Assign tool parameters
+        to_project_fc = parameters[0].valueAsText
+        distance_fc = parameters[1].valueAsText
         distance_field = parameters[2].valueAsText
-        toProjectFile = parameters[0].valueAsText
-        OutputFeatureClass = parameters[5].valueAsText
+        zone_fc = parameters[3].valueAsText
+        zone_field = parameters[4].valueAsText
+        output_fc = parameters[5].valueAsText
         dem = parameters[6].valueAsText
         remove_nulls = parameters[7].value
         include_projection = parameters[8].value
-        projection_lines = parameters[9].valueAsText
+        projection_lines_fc = parameters[9].valueAsText
 
-        def near_join(projected, river, distance_field, dem):
-            near = arcpy.analysis.Near(in_features=projected,
-                                       near_features=river, search_radius="#",
-                                       location="LOCATION", angle="ANGLE", method="PLANAR")
+        def near_join(projected, river, distance, elevation):
+            near = arcpy.analysis.Near(in_features=projected, near_features=river,
+                                       search_radius="#", location="LOCATION",
+                                       angle="ANGLE", method="PLANAR")
 
             join = arcpy.management.JoinField(in_data=near, in_field="NEAR_FID",
-                                              join_table=river,
-                                              join_field="OBJECTID", fields=distance_field)
+                                              join_table=river, join_field="OBJECTID",
+                                              fields=distance)
 
-            arcpy.sa.ExtractMultiValuesToPoints(join, dem, "NONE")
+            arcpy.sa.ExtractMultiValuesToPoints(join, elevation, "NONE")
 
-        if zonesFile is None:
-            output = arcpy.management.Copy(toProjectFile, OutputFeatureClass)
-            near_join(output, milesFile, distance_field, dem)
+        if zone_fc is None:
+            output = arcpy.management.Copy(to_project_fc, output_fc)
+            near_join(output, distance_fc, distance_field, dem)
 
-        if zonesFile is not None:
+        if zone_fc is not None:
             miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
             to_project_spatial = arcpy.Describe(parameters[0].value).spatialReference
 
@@ -187,34 +187,34 @@ class Projector(object):
 
             # Split Points of Interest into zones
             messages.addMessage("Splitting points based on zones ...")
-            arcpy.analysis.Split(in_features=toProjectFile, split_features=zonesFile, split_field=zone_field,
+            arcpy.analysis.Split(in_features=to_project_fc, split_features=zone_fc, split_field=zone_field,
                                  out_workspace=scratch + "/PointsSplit", cluster_tolerance="#")
 
             # Rename feature classes
             arcpy.env.workspace = scratch
-            pointsList = arcpy.ListFeatureClasses('', '', "PointsSplit")
+            points_list = arcpy.ListFeatureClasses('', '', "PointsSplit")
             # messages.addMessage(pointsList)
-            for stuff in pointsList:
+            for stuff in points_list:
                 arcpy.management.Rename(str(stuff), str(stuff) + "_pt")
 
             # Split Miles into zones
             messages.addMessage("Splitting miles based on zones ...")
-            arcpy.analysis.Split(in_features=milesFile, split_features=zonesFile, split_field=zone_field,
+            arcpy.analysis.Split(in_features=distance_fc, split_features=zone_fc, split_field=zone_field,
                                  out_workspace=scratch + "/MilesSplit", cluster_tolerance="#")
 
             # Rename feature classes
             arcpy.env.workspace = scratch
-            milesList = arcpy.ListFeatureClasses('', '', "MilesSplit")
-            messages.addMessage(milesList)
-            for junk in milesList:
+            miles_list = arcpy.ListFeatureClasses('', '', "MilesSplit")
+            messages.addMessage(miles_list)
+            for junk in miles_list:
                 arcpy.management.Rename(str(junk), str(junk) + "_mi")
 
             # Find zones with points for projection
-            zonesList = arcpy.ListFeatureClasses('', '', "PointsSplit")
-            messages.addMessage(zonesList)
+            zones_list = arcpy.ListFeatureClasses('', '', "PointsSplit")
+            messages.addMessage(zones_list)
 
             # Find zones with points for projection
-            for item in zonesList:
+            for item in zones_list:
                 if arcpy.Exists(scratch + "/PointsSplit/" + item) and arcpy.Exists(
                         scratch + "/MilesSplit/" + item[0:-3] + "_mi"):
                     messages.addMessage("Working on zone: " + str(item))
@@ -230,29 +230,29 @@ class Projector(object):
                     arcpy.gp.ExtractMultiValuesToPoints_sa(scratch + "/PointsSplit/" + item, dem, "NONE")
 
             # Creat list with full path to output feature classes for merging
-            listLength = len(zonesList)
+            list_length = len(zones_list)
             # messages.addMessage(str(zonesList))
             # messages.addMessage("listLength: "+str(listLength))
-            listPaths = [scratch + "\\PointsSplit\\"] * listLength
+            list_paths = [scratch + "\\PointsSplit\\"] * list_length
             # messages.addMessage(str(listPaths))
-            mergedList = []
+            merged_list = []
 
-            for x in range(0, listLength):
+            for x in range(0, list_length):
                 # messages.addMessage("x="+str(x))
-                mergedList.append(listPaths[x] + zonesList[x])
+                merged_list.append(list_paths[x] + zones_list[x])
 
-            inputsString = ';'.join(mergedList)
-            messages.addMessage(inputsString)
-            messages.addMessage(OutputFeatureClass)
+            inputs_string = ';'.join(merged_list)
+            messages.addMessage(inputs_string)
+            messages.addMessage(output_fc)
 
-            arcpy.management.Merge(inputs=inputsString, output=OutputFeatureClass)
+            arcpy.management.Merge(inputs=inputs_string, output=output_fc)
 
             arcpy.management.Delete(in_data=scratch + "/MilesSplit", data_type="FeatureDataset")
             arcpy.management.Delete(in_data=scratch + "/PointsSplit", data_type="FeatureDataset")
 
         if remove_nulls:
             count = 0
-            with arcpy.da.UpdateCursor(OutputFeatureClass, [distance_field]) as cursor:
+            with arcpy.da.UpdateCursor(output_fc, [distance_field]) as cursor:
                 for row in cursor:
                     if row[0] is None:
                         count += 1
@@ -266,14 +266,14 @@ class Projector(object):
 
         if include_projection:
             messages.addMessage('Creating projection lines feature class...')
-            projector_output = arcpy.management.Copy(OutputFeatureClass)
+            projector_output = arcpy.management.Copy(output_fc)
             line_start = arcpy.management.CalculateGeometryAttributes(
                 in_features=projector_output,
                 geometry_property=[["POINT_X", "POINT_X"], ["POINT_Y", "POINT_Y"]]
             )
             arcpy.management.XYToLine(
                 in_table=line_start,
-                out_featureclass=projection_lines,
+                out_featureclass=projection_lines_fc,
                 startx_field="POINT_X",
                 starty_field="POINT_Y",
                 endx_field="NEAR_X",
