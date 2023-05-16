@@ -218,21 +218,20 @@ class Projector(object):
             arcpy.management.Delete(in_data=scratch + "/MilesSplit", data_type="FeatureDataset")
             arcpy.management.Delete(in_data=scratch + "/PointsSplit", data_type="FeatureDataset")
 
-        removeNulls = parameters[7].valueAsText
-        if removeNulls == "true":
-            # For testing
-            fields = arcpy.ListFields(OutputFeatureClass)
-            for field in fields:
-                arcpy.AddMessage("{0} is a type of {1} with a length of {2}"
-                                 .format(field.name, field.type, field.length))
-
+        remove_nulls = parameters[7].value
+        if remove_nulls:
+            count = 0
             with arcpy.da.UpdateCursor(OutputFeatureClass, [distance_field]) as cursor:
-
                 for row in cursor:
-                    arcpy.AddMessage(row)
-                    if row[0] == None:
-                        # TODO instead of deleting these consider populating MIN, MAX, and MEAN with the value extracted from a DEM at the point
+                    if row[0] is None:
+                        count += 1
                         cursor.deleteRow()
+            if count == 1:
+                messages.addMessage(f'{count} projected point with no distance value was deleted.')
+            elif count > 1:
+                messages.addMessage(f'{count} projected points with no distance values were deleted.')
+            else:
+                messages.addMessage('All projected points have a distance value, none were deleted.')
 
         arcpy.env.overwriteOutput = False
         messages.addMessage("All Done!")
