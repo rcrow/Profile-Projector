@@ -108,17 +108,13 @@ class Projector(object):
         include_projection = parameters[8].value
         projection_lines = parameters[9]
 
-        def deactivate(dependent_param):
-            dependent_param.enabled = False
-            dependent_param.value = None
-
         if zones_file is None:
-            deactivate(zone_name)
+            utils.functions.deactivate(zone_name)
         else:
             zone_name.enabled = True
 
         if not include_projection:
-            deactivate(projection_lines)
+            utils.functions.deactivate(projection_lines)
         else:
             projection_lines.enabled = True
 
