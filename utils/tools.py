@@ -133,17 +133,17 @@ class Projector(object):
         include_projection = parameters[8].value
         projection_lines = parameters[9]
 
-        if zones_file is None or zone_name.value is not None:
-            zone_name.clearMessage()
-
         if zones_file is not None and zone_name.value is None:
             zone_name.setIDMessage("Error", "530")
 
-        if not include_projection or projection_lines.value is not None:
-            projection_lines.clearMessage()
+        if zones_file is None or zone_name.value is not None:
+            zone_name.clearMessage()
 
         if include_projection and projection_lines.value is None:
             projection_lines.setIDMessage("Error", "530")
+
+        if not include_projection or projection_lines.value is not None:
+            projection_lines.clearMessage()
 
         return
 
