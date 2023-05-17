@@ -161,14 +161,15 @@ class Projector(object):
         projection_lines_fc = parameters[9].valueAsText
 
         def near_join(projected, river, distance, elevation):
+            messages.addMessage("Finding closest points ...")
             near = arcpy.analysis.Near(in_features=projected, near_features=river,
                                        search_radius="#", location="LOCATION",
                                        angle="ANGLE", method="PLANAR")
-
+            messages.addMessage("Joining ...")
             join = arcpy.management.JoinField(in_data=near, in_field="NEAR_FID",
                                               join_table=river, join_field="OBJECTID",
                                               fields=distance)
-
+            messages.addMessage("Extracting elevation...")
             arcpy.sa.ExtractMultiValuesToPoints(join, elevation, "NONE")
 
         if zone_fc is None:
@@ -187,14 +188,6 @@ class Projector(object):
             points_fd = feature_dataset(arcpy.env.scratchWorkspace, points_fd_name, miles_spatial)
             distance_fd_name = "MilesSplit"
             distance_fd = feature_dataset(arcpy.env.scratchWorkspace, distance_fd_name, to_project_spatial)
-
-
-
-            # distance_fd_result = arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "MilesSplit",
-            #                                       miles_spatial)
-            # points_fd_result = arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "PointsSplit",
-            #                                                          to_project_spatial)
-            # points_fd = str(points_fd_result)
 
             scratch = arcpy.env.scratchWorkspace
 
@@ -230,19 +223,9 @@ class Projector(object):
             for item in zones_list:
                 split_point = os.path.join(points_fd, item)
                 split_distance = os.path.join(distance_fd, f'{item[0:-3]}_mi')
-                if arcpy.Exists(split_point) and arcpy.Exists(
-                        split_distance):
+                if arcpy.Exists(split_point) and arcpy.Exists(split_distance):
                     messages.addMessage("Working on zone: " + str(item))
-                    messages.addMessage("Finding closest points ...")
-                    arcpy.analysis.Near(in_features=split_point,
-                                        near_features=split_distance, search_radius="#",
-                                        location="LOCATION", angle="ANGLE", method="PLANAR")
-                    messages.addMessage("Joining ...")
-                    arcpy.management.JoinField(in_data=split_point, in_field="NEAR_FID",
-                                               join_table=split_distance,
-                                               join_field="OBJECTID", fields=distance_field)
-                    messages.addMessage("Extracting elevation...")
-                    arcpy.gp.ExtractMultiValuesToPoints_sa(split_point, dem, "NONE")
+                    near_join(split_point, split_distance, distance_field, dem)
                     if arcpy.Exists(output_fc):
                         arcpy.management.Append(inputs=split_point, target=output_fc)
                     else:
