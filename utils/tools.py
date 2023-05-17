@@ -1,6 +1,7 @@
 import arcpy
 import utils.functions
 from arcpy import management, analysis
+import os
 
 
 class Projector(object):
@@ -177,22 +178,24 @@ class Projector(object):
         if zone_fc is not None:
             miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
             to_project_spatial = arcpy.Describe(parameters[0].value).spatialReference
+            points_fd_name = "PointsSplit"
 
             arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "MilesSplit",
                                                   miles_spatial)
-            arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "PointsSplit",
+            points_fd_result = arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "PointsSplit",
                                                   to_project_spatial)
+            points_fd = str(points_fd_result)
 
             scratch = arcpy.env.scratchWorkspace
 
             # Split Points of Interest into zones
             messages.addMessage("Splitting points based on zones ...")
             arcpy.analysis.Split(in_features=to_project_fc, split_features=zone_fc, split_field=zone_field,
-                                 out_workspace=scratch + "/PointsSplit", cluster_tolerance="#")
+                                 out_workspace=points_fd, cluster_tolerance="#")
 
             # Rename feature classes
             arcpy.env.workspace = scratch
-            points_list = arcpy.ListFeatureClasses('', '', "PointsSplit")
+            points_list = arcpy.ListFeatureClasses('', '', points_fd_name)
             # messages.addMessage(pointsList)
             for stuff in points_list:
                 arcpy.management.Rename(str(stuff), str(stuff) + "_pt")
@@ -210,45 +213,32 @@ class Projector(object):
                 arcpy.management.Rename(str(junk), str(junk) + "_mi")
 
             # Find zones with points for projection
-            zones_list = arcpy.ListFeatureClasses('', '', "PointsSplit")
+            zones_list = arcpy.ListFeatureClasses('', '', points_fd_name)
             messages.addMessage(zones_list)
 
             # Find zones with points for projection
             for item in zones_list:
-                if arcpy.Exists(scratch + "/PointsSplit/" + item) and arcpy.Exists(
+                split_point = os.path.join(points_fd, item)
+                if arcpy.Exists(split_point) and arcpy.Exists(
                         scratch + "/MilesSplit/" + item[0:-3] + "_mi"):
                     messages.addMessage("Working on zone: " + str(item))
                     messages.addMessage("Finding closest points ...")
-                    arcpy.analysis.Near(in_features=scratch + "/PointsSplit/" + item,
+                    arcpy.analysis.Near(in_features=split_point,
                                         near_features=scratch + "/MilesSplit/" + item[0:-3] + "_mi", search_radius="#",
                                         location="LOCATION", angle="ANGLE", method="PLANAR")
                     messages.addMessage("Joining ...")
-                    arcpy.management.JoinField(in_data=scratch + "/PointsSplit/" + item, in_field="NEAR_FID",
+                    arcpy.management.JoinField(in_data=split_point, in_field="NEAR_FID",
                                                join_table=scratch + "/MilesSplit/" + item[0:-3] + "_mi",
                                                join_field="OBJECTID", fields=distance_field)
                     messages.addMessage("Extracting elevation...")
-                    arcpy.gp.ExtractMultiValuesToPoints_sa(scratch + "/PointsSplit/" + item, dem, "NONE")
-
-            # Creat list with full path to output feature classes for merging
-            list_length = len(zones_list)
-            # messages.addMessage(str(zonesList))
-            # messages.addMessage("listLength: "+str(listLength))
-            list_paths = [scratch + "\\PointsSplit\\"] * list_length
-            # messages.addMessage(str(listPaths))
-            merged_list = []
-
-            for x in range(0, list_length):
-                # messages.addMessage("x="+str(x))
-                merged_list.append(list_paths[x] + zones_list[x])
-
-            inputs_string = ';'.join(merged_list)
-            messages.addMessage(inputs_string)
-            messages.addMessage(output_fc)
-
-            arcpy.management.Merge(inputs=inputs_string, output=output_fc)
+                    arcpy.gp.ExtractMultiValuesToPoints_sa(split_point, dem, "NONE")
+                    if arcpy.Exists(output_fc):
+                        arcpy.management.Append(inputs=split_point, target=output_fc)
+                    else:
+                        arcpy.management.Merge(inputs=split_point, output=output_fc)
 
             arcpy.management.Delete(in_data=scratch + "/MilesSplit", data_type="FeatureDataset")
-            arcpy.management.Delete(in_data=scratch + "/PointsSplit", data_type="FeatureDataset")
+            arcpy.management.Delete(in_data=points_fd, data_type="FeatureDataset")
 
         if remove_nulls:
             count = 0
