@@ -2,6 +2,7 @@ import arcpy
 import utils.functions
 from arcpy import management, analysis
 import os
+import sys
 
 
 class Projector(object):
@@ -173,8 +174,15 @@ class Projector(object):
             arcpy.sa.ExtractMultiValuesToPoints(join, elevation, "NONE")
 
         if zone_fc is None:
-            output = arcpy.management.Copy(to_project_fc, output_fc)
-            near_join(output, distance_fc, distance_field, dem)
+            try:
+                output = arcpy.management.Copy(to_project_fc, output_fc)
+                near_join(output, distance_fc, distance_field, dem)
+            except arcpy.ExecuteError:
+                if arcpy.Exists(output_fc):
+                    arcpy.management.Delete(output_fc)
+                e = sys.exc_info()[1]
+                messages.addErrorMessage(e.args[0])
+                return
 
         if zone_fc is not None:
             miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
