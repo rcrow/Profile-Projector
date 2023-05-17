@@ -178,13 +178,23 @@ class Projector(object):
         if zone_fc is not None:
             miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
             to_project_spatial = arcpy.Describe(parameters[0].value).spatialReference
-            points_fd_name = "PointsSplit"
 
-            arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "MilesSplit",
-                                                  miles_spatial)
-            points_fd_result = arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "PointsSplit",
-                                                  to_project_spatial)
-            points_fd = str(points_fd_result)
+            def feature_dataset(workspace, name, projection):
+                fd_result = arcpy.management.CreateFeatureDataset(workspace, name, projection)
+                return str(fd_result)
+
+            points_fd_name = "PointsSplit"
+            points_fd = feature_dataset(arcpy.env.scratchWorkspace, points_fd_name, miles_spatial)
+            distance_fd_name = "MilesSplit"
+            distance_fd = feature_dataset(arcpy.env.scratchWorkspace, distance_fd_name, to_project_spatial)
+
+
+
+            # distance_fd_result = arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "MilesSplit",
+            #                                       miles_spatial)
+            # points_fd_result = arcpy.management.CreateFeatureDataset(arcpy.env.scratchWorkspace, "PointsSplit",
+            #                                                          to_project_spatial)
+            # points_fd = str(points_fd_result)
 
             scratch = arcpy.env.scratchWorkspace
 
@@ -203,11 +213,11 @@ class Projector(object):
             # Split Miles into zones
             messages.addMessage("Splitting miles based on zones ...")
             arcpy.analysis.Split(in_features=distance_fc, split_features=zone_fc, split_field=zone_field,
-                                 out_workspace=scratch + "/MilesSplit", cluster_tolerance="#")
+                                 out_workspace=distance_fd, cluster_tolerance="#")
 
             # Rename feature classes
             arcpy.env.workspace = scratch
-            miles_list = arcpy.ListFeatureClasses('', '', "MilesSplit")
+            miles_list = arcpy.ListFeatureClasses('', '', distance_fd_name)
             messages.addMessage(miles_list)
             for junk in miles_list:
                 arcpy.management.Rename(str(junk), str(junk) + "_mi")
@@ -219,16 +229,17 @@ class Projector(object):
             # Find zones with points for projection
             for item in zones_list:
                 split_point = os.path.join(points_fd, item)
+                split_distance = os.path.join(distance_fd, f'{item[0:-3]}_mi')
                 if arcpy.Exists(split_point) and arcpy.Exists(
-                        scratch + "/MilesSplit/" + item[0:-3] + "_mi"):
+                        split_distance):
                     messages.addMessage("Working on zone: " + str(item))
                     messages.addMessage("Finding closest points ...")
                     arcpy.analysis.Near(in_features=split_point,
-                                        near_features=scratch + "/MilesSplit/" + item[0:-3] + "_mi", search_radius="#",
+                                        near_features=split_distance, search_radius="#",
                                         location="LOCATION", angle="ANGLE", method="PLANAR")
                     messages.addMessage("Joining ...")
                     arcpy.management.JoinField(in_data=split_point, in_field="NEAR_FID",
-                                               join_table=scratch + "/MilesSplit/" + item[0:-3] + "_mi",
+                                               join_table=split_distance,
                                                join_field="OBJECTID", fields=distance_field)
                     messages.addMessage("Extracting elevation...")
                     arcpy.gp.ExtractMultiValuesToPoints_sa(split_point, dem, "NONE")
@@ -237,7 +248,7 @@ class Projector(object):
                     else:
                         arcpy.management.Merge(inputs=split_point, output=output_fc)
 
-            arcpy.management.Delete(in_data=scratch + "/MilesSplit", data_type="FeatureDataset")
+            arcpy.management.Delete(in_data=distance_fd, data_type="FeatureDataset")
             arcpy.management.Delete(in_data=points_fd, data_type="FeatureDataset")
 
         if remove_nulls:
