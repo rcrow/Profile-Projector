@@ -244,18 +244,26 @@ class Projector(object):
 
             # Find zones with points for projection
             for item in zones_list:
+                base_item = item[0:-3]
                 split_point = os.path.join(r'memory/', item)
-                messages.addMessage(split_point)
-                split_distance = os.path.join(r'memory/', f'{item[0:-3]}_mi')
-                messages.addMessage(split_distance)
+                split_distance = os.path.join(r'memory/', f'{base_item}_mi')
                 if arcpy.Exists(split_point) and arcpy.Exists(split_distance):
-                    messages.addMessage("Working on zone: " + str(item))
+                    messages.addMessage("Working on zone: " + str(base_item))
                     near_join(split_point, split_distance, distance_field, dem)
                     if arcpy.Exists(output_fc):
                         arcpy.management.Append(inputs=split_point, target=output_fc)
                     else:
                         arcpy.management.Merge(inputs=split_point, output=output_fc)
-                arcpy.management.Delete(r'memory/')
+                else:
+                    if not arcpy.Exists(split_point):
+                        messages.addErrorMessage(f'For zone {base_item}, the points to project feature class '
+                                                 f'is missing.')
+                    if not arcpy.Exists(split_distance):
+                        messages.addErrorMessage(f'For zone {base_item}, the river distance feature class '
+                                                 f'is missing.')
+                    arcpy.management.Delete(r'memory/')
+                    return
+            arcpy.management.Delete(r'memory/')
 
         if remove_nulls:
             count = 0
@@ -276,16 +284,14 @@ class Projector(object):
             projector_output = arcpy.management.Copy(output_fc)
             line_start = arcpy.management.CalculateGeometryAttributes(
                 in_features=projector_output,
-                geometry_property=[["POINT_X", "POINT_X"], ["POINT_Y", "POINT_Y"]]
-            )
+                geometry_property=[["POINT_X", "POINT_X"], ["POINT_Y", "POINT_Y"]])
             arcpy.management.XYToLine(
                 in_table=line_start,
                 out_featureclass=projection_lines_fc,
                 startx_field="POINT_X",
                 starty_field="POINT_Y",
                 endx_field="NEAR_X",
-                endy_field="NEAR_Y"
-            )
+                endy_field="NEAR_Y")
             arcpy.management.Delete(line_start)
 
         arcpy.env.overwriteOutput = False
