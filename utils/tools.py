@@ -163,12 +163,17 @@ class Projector(object):
 
         def near_join(projected, river, distance, elevation):
             messages.addMessage("Finding closest points ...")
-            near = arcpy.analysis.Near(in_features=projected, near_features=river,
-                                       search_radius="#", location="LOCATION",
-                                       angle="ANGLE", method="PLANAR")
+            near = arcpy.analysis.Near(in_features=projected,
+                                       near_features=river,
+                                       search_radius="#",
+                                       location="LOCATION",
+                                       angle="ANGLE",
+                                       method="PLANAR")
             messages.addMessage("Joining ...")
-            join = arcpy.management.JoinField(in_data=near, in_field="NEAR_FID",
-                                              join_table=river, join_field="OBJECTID",
+            join = arcpy.management.JoinField(in_data=near,
+                                              in_field="NEAR_FID",
+                                              join_table=river,
+                                              join_field="OBJECTID",
                                               fields=distance)
             messages.addMessage("Extracting elevation...")
             arcpy.sa.ExtractMultiValuesToPoints(join, elevation, "NONE")
@@ -194,69 +199,55 @@ class Projector(object):
 
         if zone_fc is None:
             try:
-                output = arcpy.management.Copy(to_project_fc, output_fc)
+                output = arcpy.management.CopyFeatures(to_project_fc, r'memory\to_project_fc')
                 near_join(output, distance_fc, distance_field, dem)
             except arcpy.ExecuteError:
-                delete_intermediate(output_fc)
+                arcpy.management.Delete('memory/')
+                gp_error()
                 return
+            else:
+                arcpy.management.CopyFeatures(output, output_fc)
+                arcpy.management.Delete('memory/')
 
         if zone_fc is not None:
-            miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
-            to_project_spatial = arcpy.Describe(parameters[0].value).spatialReference
-            scratch = arcpy.env.scratchWorkspace
-            points_fd_name = "PointsSplit"
-            distance_fd_name = "MilesSplit"
-            intermediate_data = []
-
-            try:
-                points_fd = feature_dataset(scratch, points_fd_name, miles_spatial)
-                intermediate_data.append(points_fd)
-            except arcpy.ExecuteError:
-                if intermediate_data:
-                    delete_intermediates(intermediate_data)
-                return
-            try:
-                distance_fd = feature_dataset(scratch, distance_fd_name, to_project_spatial)
-                intermediate_data.append(distance_fd)
-            except arcpy.ExecuteError:
-                if intermediate_data:
-                    delete_intermediates(intermediate_data)
-                return
-
-
+            zone_mem = arcpy.management.CopyFeatures(zone_fc, r'memory\zone_mem')
+            with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
+                for row in cursor:
+                    row[0] = f'{row[0]}_pt'
+                    cursor.updateRow(row)
 
             # Split Points of Interest into zones
             messages.addMessage("Splitting points based on zones ...")
-            arcpy.analysis.Split(in_features=to_project_fc, split_features=zone_fc, split_field=zone_field,
-                                 out_workspace=points_fd, cluster_tolerance="#")
+            arcpy.analysis.Split(in_features=to_project_fc,
+                                 split_features=zone_mem,
+                                 split_field=zone_field,
+                                 out_workspace=r'memory/',
+                                 cluster_tolerance="#")
 
-            # Rename feature classes
-            arcpy.env.workspace = scratch
-            points_list = arcpy.ListFeatureClasses('', '', points_fd_name)
-            # messages.addMessage(pointsList)
-            for stuff in points_list:
-                arcpy.management.Rename(str(stuff), str(stuff) + "_pt")
+            with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
+                for row in cursor:
+                    row[0] = f'{row[0][0:-3]}_mi'
+                    cursor.updateRow(row)
 
             # Split Miles into zones
             messages.addMessage("Splitting miles based on zones ...")
-            arcpy.analysis.Split(in_features=distance_fc, split_features=zone_fc, split_field=zone_field,
-                                 out_workspace=distance_fd, cluster_tolerance="#")
-
-            # Rename feature classes
-            arcpy.env.workspace = scratch
-            miles_list = arcpy.ListFeatureClasses('', '', distance_fd_name)
-            messages.addMessage(miles_list)
-            for junk in miles_list:
-                arcpy.management.Rename(str(junk), str(junk) + "_mi")
+            arcpy.analysis.Split(in_features=distance_fc,
+                                 split_features=zone_mem,
+                                 split_field=zone_field,
+                                 out_workspace=r'memory/',
+                                 cluster_tolerance="#")
 
             # Find zones with points for projection
-            zones_list = arcpy.ListFeatureClasses('', '', points_fd_name)
+            arcpy.env.workspace = r'memory/'
+            zones_list = [fc for fc in arcpy.ListFeatureClasses() if fc.endswith('_pt')]
             messages.addMessage(zones_list)
 
             # Find zones with points for projection
             for item in zones_list:
-                split_point = os.path.join(points_fd, item)
-                split_distance = os.path.join(distance_fd, f'{item[0:-3]}_mi')
+                split_point = os.path.join(r'memory/', item)
+                messages.addMessage(split_point)
+                split_distance = os.path.join(r'memory/', f'{item[0:-3]}_mi')
+                messages.addMessage(split_distance)
                 if arcpy.Exists(split_point) and arcpy.Exists(split_distance):
                     messages.addMessage("Working on zone: " + str(item))
                     near_join(split_point, split_distance, distance_field, dem)
@@ -264,9 +255,7 @@ class Projector(object):
                         arcpy.management.Append(inputs=split_point, target=output_fc)
                     else:
                         arcpy.management.Merge(inputs=split_point, output=output_fc)
-
-            arcpy.management.Delete(in_data=distance_fd, data_type="FeatureDataset")
-            arcpy.management.Delete(in_data=points_fd, data_type="FeatureDataset")
+                arcpy.management.Delete(r'memory/')
 
         if remove_nulls:
             count = 0
