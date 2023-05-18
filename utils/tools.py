@@ -16,15 +16,15 @@ class Projector(object):
         """Define parameter definitions"""
         param0 = arcpy.Parameter(
             displayName="Point Feature Class with points to be projected:",
-            name="Points to Project",
+            name="project_points",
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
         param0.filter.list = ["Point", "Multipoint"]
 
         param1 = arcpy.Parameter(
-            displayName="Point Feature Class with river miles:",
-            name="Points with River Distance",
+            displayName="Point Feature Class with river distance:",
+            name="distance_points",
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
@@ -32,7 +32,7 @@ class Projector(object):
 
         param2 = arcpy.Parameter(
             displayName="River Distance Field:",
-            name="distance",
+            name="distance_field",
             datatype="Field",
             parameterType="Required",
             direction="Input")
@@ -41,7 +41,7 @@ class Projector(object):
 
         param3 = arcpy.Parameter(
             displayName="Polygon Feature Class with zones:",
-            name="Polygons Denoting Zones",
+            name="zone_polygons",
             datatype="GPFeatureLayer",
             parameterType="Optional",
             direction="Input")
@@ -49,7 +49,7 @@ class Projector(object):
 
         param4 = arcpy.Parameter(
             displayName="Zone Name Field:",
-            name="zone",
+            name="zone_field",
             datatype="Field",
             parameterType="Optional",
             direction="Input",
@@ -59,35 +59,35 @@ class Projector(object):
 
         param5 = arcpy.Parameter(
             displayName="Output feature class:",
-            name="OutputFeatureClass",
+            name="output_projected_points",
             datatype="DEFeatureClass",
             parameterType="Required",
             direction="Output")
 
         param6 = arcpy.Parameter(
-            displayName="Individual or raster mosaic with the elevation values (DEM):",
+            displayName="Raster or mosaic with elevation values (DEM):",
             name="DEM",
             datatype=["GPMosaicLayer", "GPRasterLayer"],
             parameterType="Required",
             direction="Input")
 
         param7 = arcpy.Parameter(
-            displayName="Remove points with associated profile point?",
-            name="removeNulls",
+            displayName="Remove projected points with no river distance value",
+            name="remove_nulls",
             datatype="Boolean",
             parameterType="Optional",
             direction="Input")
 
         param8 = arcpy.Parameter(
             displayName="Include Projection Lines",
-            name="Projection Lines",
+            name="include_projection_lines",
             datatype="Boolean",
             parameterType="Optional",
             direction="Input")
 
         param9 = arcpy.Parameter(
-            displayName="Output Projection Line Feature Class",
-            name="Projection Lines Feature",
+            displayName="Output Projection Line Feature Class:",
+            name="output_projection_lines_fc",
             datatype="DEFeatureClass",
             parameterType="Optional",
             direction="Output",
