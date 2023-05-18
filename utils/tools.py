@@ -195,37 +195,42 @@ class Projector(object):
                 arcpy.management.Delete('memory/')
 
         if zone_fc is not None:
-            zone_mem = arcpy.management.CopyFeatures(zone_fc, r'memory\zone_mem')
-            with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
-                for row in cursor:
-                    row[0] = f'{row[0]}_pt'
-                    cursor.updateRow(row)
+            try:
+                zone_mem = arcpy.management.CopyFeatures(zone_fc, r'memory\zone_mem')
+                with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
+                    for row in cursor:
+                        row[0] = f'{row[0]}_pt'
+                        cursor.updateRow(row)
 
-            # Split Points of Interest into zones
-            messages.addMessage("Splitting points based on zones ...")
-            arcpy.analysis.Split(in_features=to_project_fc,
-                                 split_features=zone_mem,
-                                 split_field=zone_field,
-                                 out_workspace=r'memory/',
-                                 cluster_tolerance="#")
+                # Split Points of Interest into zones
+                messages.addMessage("Splitting points based on zones ...")
+                arcpy.analysis.Split(in_features=to_project_fc,
+                                     split_features=zone_mem,
+                                     split_field=zone_field,
+                                     out_workspace=r'memory/',
+                                     cluster_tolerance="#")
 
-            with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
-                for row in cursor:
-                    row[0] = f'{row[0][0:-3]}_mi'
-                    cursor.updateRow(row)
+                with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
+                    for row in cursor:
+                        row[0] = f'{row[0][0:-3]}_mi'
+                        cursor.updateRow(row)
 
-            # Split Miles into zones
-            messages.addMessage("Splitting miles based on zones ...")
-            arcpy.analysis.Split(in_features=distance_fc,
-                                 split_features=zone_mem,
-                                 split_field=zone_field,
-                                 out_workspace=r'memory/',
-                                 cluster_tolerance="#")
+                # Split Miles into zones
+                messages.addMessage("Splitting miles based on zones ...")
+                arcpy.analysis.Split(in_features=distance_fc,
+                                     split_features=zone_mem,
+                                     split_field=zone_field,
+                                     out_workspace=r'memory/',
+                                     cluster_tolerance="#")
 
-            # Find zones with points for projection
-            arcpy.env.workspace = r'memory/'
-            zones_list = [fc for fc in arcpy.ListFeatureClasses() if fc.endswith('_pt')]
-            messages.addMessage(zones_list)
+                # Find zones with points for projection
+                arcpy.env.workspace = r'memory/'
+                zones_list = [fc for fc in arcpy.ListFeatureClasses() if fc.endswith('_pt')]
+                messages.addMessage(zones_list)
+            except arcpy.ExecuteError:
+                gp_error()
+                arcpy.management.Delete(r'memory/')
+                return
 
             # Find zones with points for projection
             for item in zones_list:
@@ -266,18 +271,24 @@ class Projector(object):
 
         if include_projection:
             messages.addMessage('Creating projection lines feature class...')
-            projector_output = arcpy.management.Copy(output_fc)
-            line_start = arcpy.management.CalculateGeometryAttributes(
-                in_features=projector_output,
-                geometry_property=[["POINT_X", "POINT_X"], ["POINT_Y", "POINT_Y"]])
-            arcpy.management.XYToLine(
-                in_table=line_start,
-                out_featureclass=projection_lines_fc,
-                startx_field="POINT_X",
-                starty_field="POINT_Y",
-                endx_field="NEAR_X",
-                endy_field="NEAR_Y")
-            arcpy.management.Delete(line_start)
+            try:
+                projector_output_mem = arcpy.management.CopyFeatures(output_fc, r'memory\output_fc')
+                arcpy.management.CalculateGeometryAttributes(
+                    in_features=projector_output_mem,
+                    geometry_property=[["POINT_X", "POINT_X"],["POINT_Y", "POINT_Y"]])
+                arcpy.management.XYToLine(
+                    in_table=projector_output_mem,
+                    out_featureclass=projection_lines_fc,
+                    startx_field="POINT_X",
+                    starty_field="POINT_Y",
+                    endx_field="NEAR_X",
+                    endy_field="NEAR_Y")
+            except arcpy.ExecuteError:
+                gp_error()
+                arcpy.management.Delete(r'memory/')
+                return
+
+            arcpy.management.Delete(r'memory/')
 
         arcpy.env.overwriteOutput = False
         messages.addMessage("All Done!")
