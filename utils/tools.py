@@ -161,22 +161,23 @@ class Projector(object):
         include_projection = parameters[8].value
         projection_lines_fc = parameters[9].valueAsText
 
+        #
         def near_join_extract(projected, river, distance, elevation):
             messages.addMessage("Finding closest points ...")
-            near = arcpy.analysis.Near(in_features=projected,
-                                       near_features=river,
-                                       search_radius="#",
-                                       location="LOCATION",
-                                       angle="ANGLE",
-                                       method="PLANAR")
+            arcpy.analysis.Near(in_features=projected,
+                                near_features=river,
+                                search_radius="#",
+                                location="LOCATION",
+                                angle="ANGLE",
+                                method="PLANAR")
             messages.addMessage("Joining ...")
-            join = arcpy.management.JoinField(in_data=near,
-                                              in_field="NEAR_FID",
-                                              join_table=river,
-                                              join_field="OBJECTID",
-                                              fields=distance)
+            arcpy.management.JoinField(in_data=projected,
+                                       in_field="NEAR_FID",
+                                       join_table=river,
+                                       join_field="OBJECTID",
+                                       fields=distance)
             messages.addMessage("Extracting elevation...")
-            arcpy.sa.ExtractMultiValuesToPoints(join, elevation, "NONE")
+            arcpy.sa.ExtractMultiValuesToPoints(projected, elevation, "NONE")
 
         def gp_error():
             e = sys.exc_info()[1]
@@ -282,7 +283,7 @@ class Projector(object):
                 projector_output_mem = arcpy.management.CopyFeatures(output_fc, r'memory\output_fc')
                 arcpy.management.CalculateGeometryAttributes(
                     in_features=projector_output_mem,
-                    geometry_property=[["POINT_X", "POINT_X"],["POINT_Y", "POINT_Y"]])
+                    geometry_property=[["POINT_X", "POINT_X"], ["POINT_Y", "POINT_Y"]])
                 arcpy.management.XYToLine(
                     in_table=projector_output_mem,
                     out_featureclass=projection_lines_fc,
