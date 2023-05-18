@@ -238,12 +238,16 @@ class Projector(object):
                 split_point = os.path.join(r'memory/', item)
                 split_distance = os.path.join(r'memory/', f'{base_item}_mi')
                 if arcpy.Exists(split_point) and arcpy.Exists(split_distance):
-                    messages.addMessage("Working on zone: " + str(base_item))
-                    near_join_extract(split_point, split_distance, distance_field, dem)
-                    if arcpy.Exists(output_fc):
-                        arcpy.management.Append(inputs=split_point, target=output_fc)
-                    else:
-                        arcpy.management.Merge(inputs=split_point, output=output_fc)
+                    try:
+                        messages.addMessage("Working on zone: " + str(base_item))
+                        near_join_extract(split_point, split_distance, distance_field, dem)
+                        if arcpy.Exists(output_fc):
+                            arcpy.management.Append(inputs=split_point, target=output_fc)
+                        else:
+                            arcpy.management.Merge(inputs=split_point, output=output_fc)
+                    except arcpy.ExecuteError:
+                        gp_error()
+                        arcpy.management.Delete(r'memory/')
                 else:
                     if not arcpy.Exists(split_point):
                         messages.addErrorMessage(f'For zone {base_item}, the points to project feature class '
