@@ -161,7 +161,8 @@ class Projector(object):
         include_projection = parameters[8].value
         projection_lines_fc = parameters[9].valueAsText
 
-        #
+        # Runs the Near, Join, and Extract tools on points to be projected.
+        # All of these tools modify the input, and so can all be run on the same input feature class
         def near_join_extract(projected, river, distance, elevation):
             messages.addMessage("Finding closest points ...")
             arcpy.analysis.Near(in_features=projected,
@@ -179,10 +180,14 @@ class Projector(object):
             messages.addMessage("Extracting elevation...")
             arcpy.sa.ExtractMultiValuesToPoints(projected, elevation, "NONE")
 
+        # Retrieves script errors, used for except statements
         def gp_error():
             e = sys.exc_info()[1]
             messages.addErrorMessage(e.args[0])
 
+        # When a user does not specify zones. Split is not performed
+        # Intermediates are written to memory, and deleted if there is an error, or when processing finishes
+        # The final output is saved to disk
         if zone_fc is None:
             try:
                 output = arcpy.management.CopyFeatures(to_project_fc, r'memory\to_project_fc')
@@ -194,15 +199,20 @@ class Projector(object):
             arcpy.management.CopyFeatures(output, output_fc)
             arcpy.management.Delete('memory/')
 
+        # When a user does specify zones, split the input point features before performing near_join_extract
+        # Intermediates are written to memory, and deleted if there is an error, or when processing finishes
+        # The final output is saved to disk
         if zone_fc is not None:
             try:
+                # Copy zones to memory and rename the zone name fields.
+                # The split tool will use the zone names as the output feature class names.
                 zone_mem = arcpy.management.CopyFeatures(zone_fc, r'memory\zone_mem')
                 with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
                     for row in cursor:
                         row[0] = f'{row[0]}_pt'
                         cursor.updateRow(row)
 
-                # Split Points of Interest into zones
+                # Split Points to be projected based on zones. Each will be named as zoneName_pt
                 messages.addMessage("Splitting points based on zones ...")
                 arcpy.analysis.Split(in_features=to_project_fc,
                                      split_features=zone_mem,
@@ -210,12 +220,13 @@ class Projector(object):
                                      out_workspace=r'memory/',
                                      cluster_tolerance="#")
 
+                # Rename the zones again, this time for splitting river distance.
                 with arcpy.da.UpdateCursor(zone_mem, [zone_field]) as cursor:
                     for row in cursor:
                         row[0] = f'{row[0][0:-3]}_mi'
                         cursor.updateRow(row)
 
-                # Split Miles into zones
+                # Split river distances into zones. Each will be named as zoneName_mi
                 messages.addMessage("Splitting miles based on zones ...")
                 arcpy.analysis.Split(in_features=distance_fc,
                                      split_features=zone_mem,
@@ -223,7 +234,8 @@ class Projector(object):
                                      out_workspace=r'memory/',
                                      cluster_tolerance="#")
 
-                # Find zones with points for projection
+                # Get a list of feature classes corresponding to the split points to be projected
+                # This gets us a zones list
                 arcpy.env.workspace = r'memory/'
                 zones_list = [fc for fc in arcpy.ListFeatureClasses() if fc.endswith('_pt')]
                 zones = [zone[0:-3] for zone in zones_list]
@@ -233,7 +245,8 @@ class Projector(object):
                 arcpy.management.Delete(r'memory/')
                 return
 
-            # Find zones with points for projection
+            # For each projected point feature class in each zone, get the corresponding river distance feature class
+            # Then run through the near_join_extract function
             for item in zones_list:
                 base_item = item[0:-3]
                 split_point = os.path.join(r'memory/', item)
@@ -242,6 +255,10 @@ class Projector(object):
                     try:
                         messages.addMessage("Working on zone: " + str(base_item))
                         near_join_extract(split_point, split_distance, distance_field, dem)
+
+                        # Combine the results. Use merge when the first near_join_extract is done to create the output
+                        # After the output is already created, use append to add new results
+                        # This is all written to disk
                         if arcpy.Exists(output_fc):
                             arcpy.management.Append(inputs=split_point, target=output_fc)
                         else:
@@ -263,6 +280,8 @@ class Projector(object):
                     return
             arcpy.management.Delete(r'memory/')
 
+        # If the user wants to remove projected points with no river values.
+        # Add a message corresponding to the number of points removed.
         if remove_nulls:
             count = 0
             with arcpy.da.UpdateCursor(output_fc, [distance_field]) as cursor:
@@ -277,6 +296,8 @@ class Projector(object):
             else:
                 messages.addMessage('All projected points have a distance value, none were deleted.')
 
+        # If the user wants to include projection lines, run through the steps
+        # The projected points output is copied to memory, only the final output is saved back to the disk.
         if include_projection:
             messages.addMessage('Creating projection lines feature class...')
             try:
