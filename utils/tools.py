@@ -161,7 +161,7 @@ class Projector(object):
         include_projection = parameters[8].value
         projection_lines_fc = parameters[9].valueAsText
 
-        def near_join(projected, river, distance, elevation):
+        def near_join_extract(projected, river, distance, elevation):
             messages.addMessage("Finding closest points ...")
             near = arcpy.analysis.Near(in_features=projected,
                                        near_features=river,
@@ -185,7 +185,7 @@ class Projector(object):
         if zone_fc is None:
             try:
                 output = arcpy.management.CopyFeatures(to_project_fc, r'memory\to_project_fc')
-                near_join(output, distance_fc, distance_field, dem)
+                near_join_extract(output, distance_fc, distance_field, dem)
             except arcpy.ExecuteError:
                 arcpy.management.Delete('memory/')
                 gp_error()
@@ -226,7 +226,8 @@ class Projector(object):
                 # Find zones with points for projection
                 arcpy.env.workspace = r'memory/'
                 zones_list = [fc for fc in arcpy.ListFeatureClasses() if fc.endswith('_pt')]
-                messages.addMessage(zones_list)
+                zones = [zone[0:-3] for zone in zones_list]
+                messages.addMessage(f'Zones: {zones}')
             except arcpy.ExecuteError:
                 gp_error()
                 arcpy.management.Delete(r'memory/')
@@ -239,7 +240,7 @@ class Projector(object):
                 split_distance = os.path.join(r'memory/', f'{base_item}_mi')
                 if arcpy.Exists(split_point) and arcpy.Exists(split_distance):
                     messages.addMessage("Working on zone: " + str(base_item))
-                    near_join(split_point, split_distance, distance_field, dem)
+                    near_join_extract(split_point, split_distance, distance_field, dem)
                     if arcpy.Exists(output_fc):
                         arcpy.management.Append(inputs=split_point, target=output_fc)
                     else:
