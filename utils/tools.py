@@ -190,9 +190,8 @@ class Projector(object):
                 arcpy.management.Delete('memory/')
                 gp_error()
                 return
-            else:
-                arcpy.management.CopyFeatures(output, output_fc)
-                arcpy.management.Delete('memory/')
+            arcpy.management.CopyFeatures(output, output_fc)
+            arcpy.management.Delete('memory/')
 
         if zone_fc is not None:
             try:
