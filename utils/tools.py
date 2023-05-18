@@ -182,21 +182,6 @@ class Projector(object):
             e = sys.exc_info()[1]
             messages.addErrorMessage(e.args[0])
 
-        def delete_intermediate(delete_item):
-            if arcpy.Exists(delete_item):
-                arcpy.management.Delete(delete_item)
-            gp_error()
-
-        def delete_intermediates(delete_items):
-            for to_delete in delete_items:
-                if arcpy.Exists(to_delete):
-                    arcpy.management.Delete(to_delete)
-            gp_error()
-
-        def feature_dataset(workspace, name, projection):
-            fd_result = arcpy.management.CreateFeatureDataset(workspace, name, projection)
-            return str(fd_result)
-
         if zone_fc is None:
             try:
                 output = arcpy.management.CopyFeatures(to_project_fc, r'memory\to_project_fc')
