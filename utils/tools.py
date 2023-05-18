@@ -173,31 +173,57 @@ class Projector(object):
             messages.addMessage("Extracting elevation...")
             arcpy.sa.ExtractMultiValuesToPoints(join, elevation, "NONE")
 
+        def gp_error():
+            e = sys.exc_info()[1]
+            messages.addErrorMessage(e.args[0])
+
+        def delete_intermediate(delete_item):
+            if arcpy.Exists(delete_item):
+                arcpy.management.Delete(delete_item)
+            gp_error()
+
+        def delete_intermediates(delete_items):
+            for to_delete in delete_items:
+                if arcpy.Exists(to_delete):
+                    arcpy.management.Delete(to_delete)
+            gp_error()
+
+        def feature_dataset(workspace, name, projection):
+            fd_result = arcpy.management.CreateFeatureDataset(workspace, name, projection)
+            return str(fd_result)
+
         if zone_fc is None:
             try:
                 output = arcpy.management.Copy(to_project_fc, output_fc)
                 near_join(output, distance_fc, distance_field, dem)
             except arcpy.ExecuteError:
-                if arcpy.Exists(output_fc):
-                    arcpy.management.Delete(output_fc)
-                e = sys.exc_info()[1]
-                messages.addErrorMessage(e.args[0])
+                delete_intermediate(output_fc)
                 return
 
         if zone_fc is not None:
             miles_spatial = arcpy.Describe(parameters[1].value).spatialReference
             to_project_spatial = arcpy.Describe(parameters[0].value).spatialReference
-
-            def feature_dataset(workspace, name, projection):
-                fd_result = arcpy.management.CreateFeatureDataset(workspace, name, projection)
-                return str(fd_result)
-
-            points_fd_name = "PointsSplit"
-            points_fd = feature_dataset(arcpy.env.scratchWorkspace, points_fd_name, miles_spatial)
-            distance_fd_name = "MilesSplit"
-            distance_fd = feature_dataset(arcpy.env.scratchWorkspace, distance_fd_name, to_project_spatial)
-
             scratch = arcpy.env.scratchWorkspace
+            points_fd_name = "PointsSplit"
+            distance_fd_name = "MilesSplit"
+            intermediate_data = []
+
+            try:
+                points_fd = feature_dataset(scratch, points_fd_name, miles_spatial)
+                intermediate_data.append(points_fd)
+            except arcpy.ExecuteError:
+                if intermediate_data:
+                    delete_intermediates(intermediate_data)
+                return
+            try:
+                distance_fd = feature_dataset(scratch, distance_fd_name, to_project_spatial)
+                intermediate_data.append(distance_fd)
+            except arcpy.ExecuteError:
+                if intermediate_data:
+                    delete_intermediates(intermediate_data)
+                return
+
+
 
             # Split Points of Interest into zones
             messages.addMessage("Splitting points based on zones ...")
