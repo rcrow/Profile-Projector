@@ -248,6 +248,9 @@ class Projector(object):
                     except arcpy.ExecuteError:
                         gp_error()
                         arcpy.management.Delete(r'memory/')
+                        if arcpy.Exists(output_fc):
+                            arcpy.management.Delete(output_fc)
+                        return
                 else:
                     if not arcpy.Exists(split_point):
                         messages.addErrorMessage(f'For zone {base_item}, the points to project feature class '
