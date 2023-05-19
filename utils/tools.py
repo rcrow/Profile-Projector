@@ -322,3 +322,114 @@ class Projector(object):
         arcpy.env.overwriteOutput = False
         messages.addMessage("All Done!")
         return
+
+
+class MapUnitZonalStats(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Map Unit Zonal Stats"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Map Unit Polygons:",
+            name="map_units",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input")
+        param0.filter.list = ["Polygon"]
+
+        param1 = arcpy.Parameter(
+            displayName="Zone Name Field:",
+            name="zone_field",
+            datatype="Field",
+            parameterType="Required",
+            direction="Input",
+            enabled=False)
+
+        param1.parameterDependencies = [param0.name]
+        param1.filter.list = ["Text", "Short", "Long"]
+
+        param2 = arcpy.Parameter(
+            displayName="Raster or mosaic with elevation values (DEM):",
+            name="DEM",
+            datatype=["GPMosaicLayer", "GPRasterLayer"],
+            parameterType="Required",
+            direction="Input")
+
+        param3 = arcpy.Parameter(
+            displayName="Output Feature Class:",
+            name="output_fc",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Output")
+
+        params = [param0, param1, param2, param3]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        map_units = parameters[0].value
+        zone_field = parameters[1]
+
+        if map_units is None:
+            utils.functions.deactivate(zone_field)
+        else:
+            zone_field.enabled = True
+
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        map_units = parameters[0].valueAsText
+        zone_field = parameters[1].valueAsText
+        dem = parameters[2].valueAsText
+        output_fc = parameters[3].valueAsText
+
+        def gp_error():
+            e = sys.exc_info()[1]
+            messages.addErrorMessage(e.args[0])
+
+        try:
+            messages.addMessage("Calculating zonal statistics...")
+            map_unit_stats = arcpy.sa.ZonalStatisticsAsTable(in_zone_data=map_units,
+                                                             zone_field=zone_field,
+                                                             in_value_raster=dem,
+                                                             out_table=r'memory\map_unit_stats',
+                                                             statistics_type="MIN_MAX_MEAN",
+                                                             percentile_interpolation_type="AUTO_DETECT"
+                                                             )
+
+            messages.addMessage("Converting polygons to points...")
+            statistics_points = arcpy.management.FeatureToPoint(map_units, r'memory\statistics_point')
+
+            messages.addMessage("Adding zonal statistics to points...")
+            arcpy.management.JoinField(in_data=statistics_points,
+                                       in_field=zone_field,
+                                       join_table=map_unit_stats,
+                                       join_field=zone_field,
+                                       fields=["MIN", "MAX", "MEAN"]
+                                       )
+
+            messages.addMessage("Saving output...")
+            arcpy.management.CopyFeatures(statistics_points, output_fc)
+        except arcpy.ExecuteError:
+            gp_error()
+            arcpy.management.Delete(r'memory/')
+            return
+
+        arcpy.management.Delete(r'memory/')
+        return

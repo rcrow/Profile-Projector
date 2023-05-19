@@ -1,6 +1,6 @@
 import arcpy
 from utils import tools
-from utils.tools import Projector
+from utils.tools import Projector, MapUnitZonalStats
 import importlib
 importlib.reload(tools)
 
@@ -14,7 +14,7 @@ class Toolbox (object):
         self.alias = "ProfileProject"
 
         # List of tool classes associated with this toolbox
-        self.tools = [Projector]
+        self.tools = [Projector, MapUnitZonalStats]
 
 
 class Tool(object):
