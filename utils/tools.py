@@ -399,10 +399,16 @@ class MapUnitZonalStats(object):
         dem = parameters[2].valueAsText
         output_fc = parameters[3].valueAsText
 
+        # Retrieves script errors, used for exceptions
         def gp_error():
             e = sys.exc_info()[1]
             messages.addErrorMessage(e.args[0])
 
+        # Calculate min, max, and mean zonal stats for an input polygon layer with an identifying zone field.
+        # Convert the polygon to points, then add the zonal stats with join field to those points
+        # Save intermediates to memory, copy the final output to disk
+        # Clear memory at the end of the script, or if an error is encountered
+        arcpy.management.Delete(r'memory/')
         try:
             messages.addMessage("Calculating zonal statistics...")
             map_unit_stats = arcpy.sa.ZonalStatisticsAsTable(in_zone_data=map_units,
