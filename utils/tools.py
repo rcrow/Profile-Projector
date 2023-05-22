@@ -180,10 +180,11 @@ class Projector(object):
             messages.addMessage("Extracting elevation...")
             arcpy.sa.ExtractMultiValuesToPoints(projected, elevation, "NONE")
 
-        # Retrieves script errors, used for except statements
+        # Retrieves script errors and clears memory workspace, used for except statements
         def gp_error():
             e = sys.exc_info()[1]
             messages.addErrorMessage(e.args[0])
+            arcpy.management.Delete('memory/')
 
         # When a user does not specify zones. Split is not performed
         # Intermediates are written to memory, and deleted if there is an error, or when processing finishes
@@ -193,7 +194,6 @@ class Projector(object):
                 output = arcpy.management.CopyFeatures(to_project_fc, r'memory\to_project_fc')
                 near_join_extract(output, distance_fc, distance_field, dem)
             except arcpy.ExecuteError:
-                arcpy.management.Delete('memory/')
                 gp_error()
                 return
             arcpy.management.CopyFeatures(output, output_fc)
@@ -242,7 +242,6 @@ class Projector(object):
                 messages.addMessage(f'Zones: {zones}')
             except arcpy.ExecuteError:
                 gp_error()
-                arcpy.management.Delete(r'memory/')
                 return
 
             # For each projected point feature class in each zone, get the corresponding river distance feature class
@@ -265,7 +264,6 @@ class Projector(object):
                             arcpy.management.Merge(inputs=split_point, output=output_fc)
                     except arcpy.ExecuteError:
                         gp_error()
-                        arcpy.management.Delete(r'memory/')
                         if arcpy.Exists(output_fc):
                             arcpy.management.Delete(output_fc)
                         return
@@ -314,7 +312,6 @@ class Projector(object):
                     endy_field="NEAR_Y")
             except arcpy.ExecuteError:
                 gp_error()
-                arcpy.management.Delete(r'memory/')
                 return
 
             arcpy.management.Delete(r'memory/')
@@ -399,10 +396,11 @@ class MapUnitZonalStats(object):
         dem = parameters[2].valueAsText
         output_fc = parameters[3].valueAsText
 
-        # Retrieves script errors, used for exceptions
+        # Retrieves script errors and clears memory workspace, used for exceptions
         def gp_error():
             e = sys.exc_info()[1]
             messages.addErrorMessage(e.args[0])
+            arcpy.management.Delete(r'memory/')
 
         # Calculate min, max, and mean zonal stats for an input polygon layer with an identifying zone field.
         # Convert the polygon to points, then add the zonal stats with join field to those points
@@ -434,7 +432,8 @@ class MapUnitZonalStats(object):
             arcpy.management.CopyFeatures(statistics_points, output_fc)
         except arcpy.ExecuteError:
             gp_error()
-            arcpy.management.Delete(r'memory/')
+            if arcpy.Exists(output_fc):
+                arcpy.management.Delete(output_fc)
             return
 
         arcpy.management.Delete(r'memory/')
