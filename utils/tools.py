@@ -147,7 +147,13 @@ class Projector(object):
 
     def execute(self, parameters, messages):
         arcpy.env.overwriteOutput = True
-        messages.addMessage("getting things started ...")
+        
+        # Adds the same message both to the tool messages and the tool's progressor
+        def set_msg_prog(msg):
+            messages.addMessage(msg)
+            arcpy.SetProgressorLabel(msg)
+        
+        arcpy.SetProgressor("default", "Getting things started ...")
 
         # Assign tool parameters
         to_project_fc = parameters[0].valueAsText
@@ -164,20 +170,20 @@ class Projector(object):
         # Runs the Near, Join, and Extract tools on points to be projected.
         # All of these tools modify the input, and so can all be run on the same input feature class
         def near_join_extract(projected, river, distance, elevation):
-            messages.addMessage("Finding closest points ...")
+            set_msg_prog("Finding closest points ...")
             arcpy.analysis.Near(in_features=projected,
                                 near_features=river,
                                 search_radius="#",
                                 location="LOCATION",
                                 angle="ANGLE",
                                 method="PLANAR")
-            messages.addMessage("Joining ...")
+            set_msg_prog("Joining ...")
             arcpy.management.JoinField(in_data=projected,
                                        in_field="NEAR_FID",
                                        join_table=river,
                                        join_field="OBJECTID",
                                        fields=distance)
-            messages.addMessage("Extracting elevation...")
+            set_msg_prog("Extracting elevation...")
             arcpy.sa.ExtractMultiValuesToPoints(projected, elevation, "NONE")
 
         # Retrieves script errors and clears memory workspace, used for except statements
@@ -213,7 +219,7 @@ class Projector(object):
                         cursor.updateRow(row)
 
                 # Split Points to be projected based on zones. Each will be named as zoneName_pt
-                messages.addMessage("Splitting points based on zones ...")
+                set_msg_prog("Splitting points based on zones ...")
                 arcpy.analysis.Split(in_features=to_project_fc,
                                      split_features=zone_mem,
                                      split_field=zone_field,
@@ -227,7 +233,7 @@ class Projector(object):
                         cursor.updateRow(row)
 
                 # Split river distances into zones. Each will be named as zoneName_mi
-                messages.addMessage("Splitting miles based on zones ...")
+                set_msg_prog("Splitting miles based on zones ...")
                 arcpy.analysis.Split(in_features=distance_fc,
                                      split_features=zone_mem,
                                      split_field=zone_field,
@@ -252,7 +258,7 @@ class Projector(object):
                 split_distance = os.path.join(r'memory/', f'{base_item}_mi')
                 if arcpy.Exists(split_point) and arcpy.Exists(split_distance):
                     try:
-                        messages.addMessage("Working on zone: " + str(base_item))
+                        set_msg_prog("Working on zone: " + str(base_item))
                         near_join_extract(split_point, split_distance, distance_field, dem)
 
                         # Combine the results. Use merge when the first near_join_extract is done to create the output
@@ -297,7 +303,7 @@ class Projector(object):
         # If the user wants to include projection lines, run through the steps
         # The projected points output is copied to memory, only the final output is saved back to the disk.
         if include_projection:
-            messages.addMessage('Creating projection lines feature class...')
+            set_msg_prog('Creating projection lines feature class...')
             try:
                 projector_output_mem = arcpy.management.CopyFeatures(output_fc, r'memory\output_fc')
                 arcpy.management.CalculateGeometryAttributes(
@@ -402,13 +408,18 @@ class MapUnitZonalStats(object):
             messages.addErrorMessage(e.args[0])
             arcpy.management.Delete(r'memory/')
 
+        # Sets the progressor and adds the same message to messages
+        def set_msg_prog(msg):
+            messages.addMessage(msg)
+            arcpy.SetProgressorLabel(msg)
+
         # Calculate min, max, and mean zonal stats for an input polygon layer with an identifying zone field.
         # Convert the polygon to points, then add the zonal stats with join field to those points
         # Save intermediates to memory, copy the final output to disk
         # Clear memory at the end of the script, or if an error is encountered
         arcpy.management.Delete(r'memory/')
         try:
-            messages.addMessage("Calculating zonal statistics...")
+            arcpy.SetProgressor("default", "Calculating zonal statistics...")
             map_unit_stats = arcpy.sa.ZonalStatisticsAsTable(in_zone_data=map_units,
                                                              zone_field=zone_field,
                                                              in_value_raster=dem,
@@ -417,10 +428,10 @@ class MapUnitZonalStats(object):
                                                              percentile_interpolation_type="AUTO_DETECT"
                                                              )
 
-            messages.addMessage("Converting polygons to points...")
+            set_msg_prog("Converting polygons to points...")
             statistics_points = arcpy.management.FeatureToPoint(map_units, r'memory\statistics_point')
 
-            messages.addMessage("Adding zonal statistics to points...")
+            set_msg_prog("Adding zonal statistics to points...")
             arcpy.management.JoinField(in_data=statistics_points,
                                        in_field=zone_field,
                                        join_table=map_unit_stats,
@@ -428,7 +439,7 @@ class MapUnitZonalStats(object):
                                        fields=["MIN", "MAX", "MEAN"]
                                        )
 
-            messages.addMessage("Saving output...")
+            set_msg_prog("Saving output...")
             arcpy.management.CopyFeatures(statistics_points, output_fc)
         except arcpy.ExecuteError:
             gp_error()
